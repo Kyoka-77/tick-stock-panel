@@ -24,6 +24,7 @@ import { boardTag } from '@/components/stock-table/primitives'
 import { fmtBigNum } from '@/lib/format'
 import { PageHeader } from '@/components/PageHeader'
 import { MarkdownRenderer } from '@/components/financials/MarkdownRenderer'
+import { downloadInBrowser } from '@/lib/browserDownload'
 import { toast } from '@/components/Toast'
 import { usePreferences } from '@/lib/useSharedQueries'
 import { useReviewState } from '@/lib/useReviewStore'
@@ -220,13 +221,8 @@ export function Review() {
     const text = viewing?.content ?? content
     if (!text) return
     const reportDate = viewing?.as_of ?? meta?.as_of ?? asOf ?? new Date().toISOString().slice(0, 10)
-    const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `复盘_${reportDate}.md`
-    a.click()
-    URL.revokeObjectURL(url)
+    // 桌面版是 WebView2, 不处理 Blob 下载 —— 统一交给系统默认浏览器
+    void downloadInBrowser(`复盘_${reportDate}.md`, text, 'text/markdown;charset=utf-8')
   }, [content, viewing, meta, asOf])
 
   // 查看历史报告(不中断后台生成:仅临时把 viewing 覆盖到主区域,

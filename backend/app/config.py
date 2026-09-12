@@ -34,6 +34,11 @@ def _user_data_root() -> Path:
       - 数据安全: Inno Setup 覆盖安装(升级)时只往 {app} 写新程序文件, 不会清空
         目录里不在安装清单上的运行时文件 (data/ 即此类), 故覆盖安装不丢数据。
         (注意: 卸载时需在 .iss 中豁免 data/, 见 packaging/tickflow.iss 的 [UninstallDelete]。)
+
+    macOS 例外 (为什么不沿用「exe 同级 data/」):
+      .app 里 sys.executable 位于 <App>.app/Contents/MacOS/, 「exe 同级 data/」会落到
+      app 包内部 —— 替换/升级 .app 即丢失用户数据, 且写入已签名 bundle 会破坏签名。
+      故 macOS 走系统惯例目录 ~/Library/Application Support/TickFlowStockPanel/data。
     旧版本数据迁移: 见 DataStore._migrate_legacy_data_dir(), 老用户首次启动自动搬迁。
 
     macOS 例外 (为什么不沿用「exe 同级 data/」):

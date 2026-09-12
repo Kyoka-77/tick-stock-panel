@@ -21,6 +21,11 @@ logger = logging.getLogger(__name__)
 _HERE = Path(__file__).resolve().parent
 _BRIDGE_MJS = _HERE / "bridge.mjs"
 
+# 桌面版是无控制台的 GUI 进程 (console=False)。此时 spawn 控制台子程序
+# (node.exe) Windows 会为它新建一个控制台窗口 —— 表现为点分时图时闪出黑窗。
+# CREATE_NO_WINDOW 让子进程在无窗口模式运行 (非 Windows 恒为 0)。
+_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 # 默认超时(秒)。全市场(realtime/instruments)与大批量 daily 可能较久, provider 侧按 op 调大。
 DEFAULT_TIMEOUT = 120
 
@@ -61,6 +66,7 @@ def run_job(job: dict, timeout: int = DEFAULT_TIMEOUT) -> dict:
             errors="replace",
             timeout=timeout,
             cwd=str(_HERE),
+            creationflags=_NO_WINDOW,
         )
     except subprocess.TimeoutExpired as e:
         logger.warning("stock-sdk 桥接超时 (op=%s, %ss)", op, timeout)

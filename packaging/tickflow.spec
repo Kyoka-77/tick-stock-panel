@@ -72,6 +72,25 @@ if sys.platform == "win32":
 hiddenimports += collect_submodules("plyer")
 hiddenimports += collect_submodules("plyer.platforms")
 
+# ── 桌面版内嵌模块 (desktop.py 运行时导入, 显式声明更稳) ─────────────
+hiddenimports += [
+    "app.desktop",
+    "app.desktop_acrylic",
+]
+
+# ── 内置数据源插件 (由 plugin.yaml 的 entry 字段 importlib 动态导入) ───
+# 静态分析看不到动态 import, 不显式声明则 frozen 后插件模块缺失,
+# 表现为插件清单在但注册/探测 Key 时报模块加载失败。
+hiddenimports += [
+    "app.plugins",
+    "app.plugins.fuyao",
+    "app.plugins.fuyao.provider",
+    "app.plugins.fuyao.client",
+    "app.plugins.stocksdk",
+    "app.plugins.stocksdk.provider",
+    "app.plugins.stocksdk.bridge",
+]
+
 # ── uvicorn 动态导入的模块 (loop/protocol/logging 按字符串加载) ──────
 hiddenimports += [
     "uvicorn.logging",
@@ -115,6 +134,34 @@ datas += [(FRONTEND_DIST, "static")]
 datas += [(TIERS_YAML, ".")]
 # 内置策略 → app/strategy/builtin/ (importlib 动态加载, 不能进 PYZ)
 datas += [(BUILTIN_STRATEGIES, "app/strategy/builtin")]
+
+# ── 内置数据源插件 (完整随包: 清单 + 运行时资源) ─────────────────────
+# 插件发现是「扫描目录 + 读 plugin.yaml」实现 (app/data_providers/custom/loader.py
+# 的 _load_builtin_plugins): 纯 .py 模块会被打进 PYZ 归档而不以文件形式落在
+# _MEIPASS, 于是 plugins_dir() 指向的目录压根不存在 → frozen 后 plugins 恒为空。
+# 表现: 设置页看不到可选数据源。故清单与运行时资源都必须显式作为 datas 带上。
+#
+#   fuyao    — 同花顺官方 REST API, runtime=none, 需自备 FUYAO_API_KEY
+#   stocksdk — 抓取第三方财经站行情, runtime=node, 需机器上有 Node.js>=18;
+#              bridge.py 用 subprocess 调 node bridge.mjs, node_modules 一并随包
+#              (实测仅 0.8MB), 免去用户手工 npm install
+PLUGINS_ROOT = ROOT / "backend" / "app" / "plugins"
+PLUGIN_ASSETS = {
+    "fuyao": ["plugin.yaml"],
+    "stocksdk": ["plugin.yaml", "bridge.mjs", "package.json", "package-lock.json"],
+}
+for _name, _files in PLUGIN_ASSETS.items():
+    _pdir = PLUGINS_ROOT / _name
+    if not _pdir.exists():
+        continue
+    for _f in _files:
+        _src = _pdir / _f
+        if _src.exists():
+            datas += [(str(_src), f"app/plugins/{_name}")]
+    # stock-sdk 的 node 依赖 (stock-sdk 包本体) 随包分发
+    _nm = _pdir / "node_modules"
+    if _nm.is_dir():
+        datas += [(str(_nm), f"app/plugins/{_name}/node_modules")]
 
 # ── 排除不需要的重型依赖 (主包不含 vectorbt 回测链) ──────────────────
 excludes = [

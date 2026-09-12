@@ -267,9 +267,59 @@ def _wait_for_server(port: int, timeout: float = 60.0) -> bool:
     return False
 
 
+class _DesktopApi:
+    """暴露给前端的桌面能力 (前端经 window.pywebview.api 调用)。"""
+
+    def set_titlebar_theme(self, dark: bool) -> bool:
+        """前端主题切换时同步窗口标题栏明暗。"""
+        from app.desktop_acrylic import set_titlebar_dark
+
+        return set_titlebar_dark(bool(dark))
+
+    def open_external_url(self, url: str) -> bool:
+        """用系统默认浏览器打开 URL (桌面版下载策略等场景)。
+
+        WebView2 不处理前端的 Blob / a.download 下载 (点击无反应), 因此下载类
+        操作改为: 前端拼出后端下载 URL -> 调本方法 -> 交给系统默认浏览器。
+
+        安全限制: 只允许本机回环地址, 避免该桥被当成任意 URL 的跳板。
+        """
+        import webbrowser
+        from urllib.parse import urlparse
+
+        try:
+            parsed = urlparse(str(url))
+        except Exception:  # noqa: BLE001
+            return False
+        if parsed.scheme not in ("http", "https"):
+            return False
+        if (parsed.hostname or "").lower() not in ("127.0.0.1", "localhost", "::1"):
+            logger.warning("拒绝用外部浏览器打开非本机地址: %s", url)
+            return False
+        try:
+            return bool(webbrowser.open(str(url)))
+        except Exception:  # noqa: BLE001
+            logger.exception("调用系统默认浏览器失败")
+            return False
+
+
 def _open_window(url: str) -> None:
     """主线程: 用 pywebview 打开桌面窗口。"""
     import webview  # type: ignore[import-not-found]
+
+    from app.config import settings
+    from app.desktop_acrylic import start_acrylic_watch
+
+    # 持久化 WebView2 用户数据目录。
+    # pywebview 的 start() 默认 private_mode=True —— 官方语义是「cookies 与
+    # localStorage 不保留」, 内部落到 tempfile.TemporaryDirectory(), 于是前端存在
+    # localStorage 的偏好 (主题 tf-theme / 气泡位置 / 列表布局等) 每次启动全被清空,
+    # 表现为「一重开应用又变回暗色」。这里显式关闭私有模式并指定 data/webview。
+    storage_path = settings.data_dir / "webview"
+    try:
+        storage_path.mkdir(parents=True, exist_ok=True)
+    except Exception:  # noqa: BLE001
+        logger.exception("WebView 数据目录创建失败, 回退默认位置")
 
     window = webview.create_window(
         _APP_NAME,
@@ -279,9 +329,13 @@ def _open_window(url: str) -> None:
         min_size=(1024, 700),
         # 桌面版固定单窗口, 禁用外部浏览器跳转
         confirm_close=False,
+        js_api=_DesktopApi(),
     )
-    # pywebview 会阻塞主线程直到窗口关闭
-    webview.start(debug=False)
+    # 亚克力窗口边框 (Windows 11): 后台线程等窗口出现后施加 DWM 系统背景材质,
+    # 不阻塞 pywebview 启动; 非 Windows / 旧系统 / 显式关闭时静默跳过。
+    start_acrylic_watch()
+    # private_mode=False: 持久化 localStorage / cookies, 主题等偏好不再丢失
+    webview.start(debug=False, private_mode=False, storage_path=str(storage_path))
 
 
 def main() -> int:

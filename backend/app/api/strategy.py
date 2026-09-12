@@ -13,9 +13,10 @@ from dataclasses import asdict
 from datetime import date
 from pathlib import Path
 from typing import Literal
+from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
 from app.backtest.minute_trigger import MINUTE_EXIT_TRIGGER_SIGNALS
@@ -838,6 +839,41 @@ def get_strategy_source(strategy_id: str, request: Request):
         raise HTTPException(status_code=404, detail="策略源文件不存在")
 
     return {"code": path.read_text(encoding="utf-8"), "source": s.source}
+
+
+@router.get("/{strategy_id}/download")
+def download_strategy_source(strategy_id: str, request: Request):
+    """以附件形式下载策略源文件 (.py)。
+
+    桌面版是 WebView2, 不处理前端的 Blob / a.download 下载 —— 表现为点
+    「下载策略」没有任何反应。因此改为后端直接返回带 Content-Disposition 的
+    响应, 前端把该 URL 交给系统默认浏览器打开即可正常下载。
+    """
+    engine = _get_engine(request)
+    s = _get_public_strategy(engine, strategy_id)
+
+    path = s.file_path
+    if not path or not path.exists():
+        raise HTTPException(status_code=404, detail="策略源文件不存在")
+
+    filename = f"{strategy_id}.py"
+    # HTTP 头值必须 latin-1 可编码: ASCII 回退名 + RFC 5987 编码真实名,
+    # 否则非 ASCII 策略名会让响应头编码失败 (客户端只看到 500)。
+    ascii_name = re.sub(
+        r"[^A-Za-z0-9._-]", "",
+        filename.encode("ascii", "ignore").decode("ascii"),
+    ).lstrip(".") or "strategy.py"
+    return Response(
+        content=path.read_bytes(),
+        media_type="text/x-python; charset=utf-8",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{ascii_name}"; '
+                f"filename*=UTF-8''{quote(filename)}"
+            ),
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @router.post("/ai/test")

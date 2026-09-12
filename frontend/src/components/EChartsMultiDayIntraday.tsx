@@ -44,7 +44,7 @@ function priceColor(close: number, prevClose: number | null): string {
 function buildModel(sessions: MinuteKlineSession[]) {
   const categories: string[] = []
   const volumeData: ({ value: number; itemStyle: { color: string } } | null)[] = []
-  const dayLabelByIndex = new Map<number, string>()
+  const dayLabelByValue = new Map<string, string>()
   const dayStartIndexes: number[] = []
   const pointByIndex = new Map<number, InfoPoint>()
   const dayRanges: {
@@ -60,8 +60,14 @@ function buildModel(sessions: MinuteKlineSession[]) {
     const session = sessions[sessionIndex]
     const start = categories.length
     dayStartIndexes.push(start)
+    // 日期标签挂在「当天真实数据的中点」上, 并且用**类目值**而非索引定位:
+    // dataZoom 缩放/平移时索引不可靠, 曾导致标签始终停在首日、与数据错位。
     if (sessionIndex % labelStep === 0 || sessionIndex === sessions.length - 1) {
-      dayLabelByIndex.set(start + Math.floor(FULL_DAY_TIMES.length / 2), session.date.slice(5))
+      // ⚠️ 锤点必须由「日期 + 中点时刻」拼出, 不能在 push 本日类目之前读
+      // categories[...] —— 那一刻该下标尚未写入, 读出来恒为 undefined,
+      // 导致 dayLabelByValue 全空、所有日期标签都不渲染 (既不显示也无法跟随平移)。
+      const midTime = FULL_DAY_TIMES[Math.floor(FULL_DAY_TIMES.length / 2)]
+      dayLabelByValue.set(`${session.date} ${midTime}`, session.date.slice(5))
     }
 
     const averagePrices = computeIntradayAverage(session.rows)
@@ -131,7 +137,7 @@ function buildModel(sessions: MinuteKlineSession[]) {
   return {
     categories,
     volumeData,
-    dayLabelByIndex,
+    dayLabelByValue,
     dayStartIndexes,
     pointByIndex,
     dayRanges,
@@ -321,7 +327,7 @@ export function EChartsMultiDayIntraday({
             fontSize: 10,
             interval: 0,
             hideOverlap: true,
-            formatter: (_value: string, index: number) => model.dayLabelByIndex.get(index) ?? '',
+            formatter: (value: string) => model.dayLabelByValue.get(String(value)) ?? '',
           },
           axisPointer: {
             label: {

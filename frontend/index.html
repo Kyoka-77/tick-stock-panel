@@ -15,6 +15,18 @@
         }
       })()
     </script>
+    <script>
+      // 预渲染字号脚本: 首屏前设好 --tf-font-scale, 避免刷新时字号跳变。
+      // 变量名与 src/lib/fontScale.ts 一致; 取值非法时保持 CSS 默认值 1。
+      (function () {
+        try {
+          var v = parseFloat(localStorage.getItem('tf-font-scale'))
+          if (isFinite(v) && v >= 0.8 && v <= 1.5) {
+            document.documentElement.style.setProperty('--tf-font-scale', String(v))
+          }
+        } catch (e) { /* 默认 1 */ }
+      })()
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="theme-color" content="#8B5CF6" />

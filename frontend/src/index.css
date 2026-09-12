@@ -77,3 +77,40 @@ body {
   -moz-osx-font-smoothing: auto;
   text-rendering: optimizeLegibility;
 }
+
+/* ===== 界面字号缩放 =====
+ * --tf-font-scale 默认 1, 运行时由 src/lib/fontScale.ts 写入,
+ * 首屏由 index.html 内联脚本预设 (避免字号跳变)。
+ *
+ * 为何不能只改 html 根字号: 本仓库有 1800+ 处任意像素字号
+ * (text-[9px] / [10px] / [11px] 等), rem 缩放对它们无效,
+ * 会出现「一部分字变大、一部分没变」。故两类刻度都在此显式等比缩放。
+ *
+ * 为何只覆写 font-size、不覆写 line-height:
+ *   Tailwind 的 leading-* 是 unitless 比值 (leading-tight = 1.25),
+ *   会随 font-size 自动适应; 不声明 line-height 也就不会与仓库里
+ *   246 处显式 leading-* 打架 (同优先级下后声明的会赢)。
+ *
+ * 位置要求: 必须排在 @tailwind utilities 之后 (即文件末尾),
+ * 才能在同名工具类之后生效。
+ */
+:root { --tf-font-scale: 1; }
+
+/* 标准刻度 (rem) */
+.text-xs   { font-size: calc(0.75rem  * var(--tf-font-scale)); }
+.text-sm   { font-size: calc(0.875rem * var(--tf-font-scale)); }
+.text-base { font-size: calc(1rem     * var(--tf-font-scale)); }
+.text-lg   { font-size: calc(1.125rem * var(--tf-font-scale)); }
+.text-xl   { font-size: calc(1.25rem  * var(--tf-font-scale)); }
+.text-2xl  { font-size: calc(1.5rem   * var(--tf-font-scale)); }
+.text-3xl  { font-size: calc(1.875rem * var(--tf-font-scale)); }
+
+/* 任意像素刻度 (仓库实际用到的档位) */
+.text-\[7px\]  { font-size: calc(7px  * var(--tf-font-scale)); }
+.text-\[8px\]  { font-size: calc(8px  * var(--tf-font-scale)); }
+.text-\[9px\]  { font-size: calc(9px  * var(--tf-font-scale)); }
+.text-\[10px\] { font-size: calc(10px * var(--tf-font-scale)); }
+.text-\[11px\] { font-size: calc(11px * var(--tf-font-scale)); }
+.text-\[12px\] { font-size: calc(12px * var(--tf-font-scale)); }
+.text-\[13px\] { font-size: calc(13px * var(--tf-font-scale)); }
+.text-\[24px\] { font-size: calc(24px * var(--tf-font-scale)); }

@@ -66,6 +66,7 @@ import { computeGroupPcts, groupPctColor, groupPctTitle } from '@/lib/watchlistG
 import { fmtPct } from '@/lib/format'
 import { findDataSource } from '@/lib/dataSources'
 import { toggleTheme, useTheme } from '@/lib/theme'
+import { FontScaleControl } from '@/components/FontScaleControl'
 import { setCurrentTotal as setAlertTotal, useUnreadAlerts } from '@/lib/monitorBadge'
 import { ExtensionSlot } from '@/extensions/ExtensionSlot'
 import { getFrontendExtensionNavigation } from '@/extensions/registry'
@@ -988,6 +989,7 @@ export function Layout() {
         <div className={cn('border-t border-border py-3 shrink-0', railMode ? 'px-2 flex flex-col items-center gap-1' : 'px-2')}>
           <div className={railMode ? 'flex flex-col items-center gap-1' : 'flex items-center gap-1'}>
             <ThemeToggle />
+            <FontScaleControl />
             <NavLink
               to="/settings"
               title={railMode ? '设置' : undefined}

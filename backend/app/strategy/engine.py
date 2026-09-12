@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import importlib.util
+import inspect
 import logging
 import sys
 import threading
@@ -33,6 +34,61 @@ from app.strategy.scoring import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _accepts_params(fn: Callable[..., Any]) -> bool:
+    """策略入口是否能接收 (df, params) 两个位置参数。
+
+    契约要求 ``filter(df, params)``, 但 AI 生成/手工编写的策略里出现过
+    只声明 ``filter(df)`` 的写法; 直接按契约调用会抛
+    ``TypeError: filter() takes 1 positional argument but 2 were given``,
+    让整条选股 500。取不到签名时按契约处理 (返回 True)。
+    """
+    try:
+        sig = inspect.signature(fn)
+    except (TypeError, ValueError):
+        return True
+    positional = 0
+    for param in sig.parameters.values():
+        if param.kind is inspect.Parameter.VAR_POSITIONAL:
+            return True
+        if param.kind in (
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        ):
+            positional += 1
+    return positional >= 2
+
+
+def _call_strategy_filter(
+    filter_fn: Callable[..., Any],
+    df: pl.DataFrame,
+    params: dict,
+    strategy_id: str,
+) -> pl.DataFrame:
+    """执行 polars_expr 策略的 filter 入口, 兼容两类既有写法。
+
+    契约 (app/strategy/prompts/strategy-guide.md):
+        ``filter(df, params) -> pl.Expr``
+
+    实测策略里出现过两类偏离写法 (AI 生成常见), 按契约硬调会直接 500:
+
+      * ``filter(df, params) -> pl.Expr``       ← 契约写法
+      * ``filter(df) -> pl.Expr``               ← 少传 params
+      * ``filter(df[, params]) -> DataFrame``   ← 直接返回过滤后的数据框
+
+    返回值只接受 pl.Expr / pl.DataFrame; 其它类型给出指名道姓的报错,
+    而不是把底层异常原样抛到 API 层。
+    """
+    result = filter_fn(df, params) if _accepts_params(filter_fn) else filter_fn(df)
+    if isinstance(result, pl.Expr):
+        return df.filter(result)
+    if isinstance(result, pl.DataFrame):
+        return result
+    raise TypeError(
+        f"策略 {strategy_id} 的 filter() 返回值类型不支持: {type(result).__name__}"
+        " (应为 pl.Expr 布尔表达式, 或 pl.DataFrame 过滤结果)"
+    )
 
 # 引擎级默认基础过滤 — 策略未定义 BASIC_FILTER 时兜底
 DEFAULT_BASIC_FILTER: dict = {
@@ -967,9 +1023,17 @@ class StrategyEngine:
                     + " — 请先在「自定义信号」中创建(timeframe=intraday)后再运行"
                 )
             if s.minute_daily_bars > 0:
-                df = s.filter_minute_history_fn(history, params, daily=context.daily_history)
+                df = (
+                    s.filter_minute_history_fn(history, params, daily=context.daily_history)
+                    if _accepts_params(s.filter_minute_history_fn)
+                    else s.filter_minute_history_fn(history, daily=context.daily_history)
+                )
             else:
-                df = s.filter_minute_history_fn(history, params)
+                df = (
+                    s.filter_minute_history_fn(history, params)
+                    if _accepts_params(s.filter_minute_history_fn)
+                    else s.filter_minute_history_fn(history)
+                )
             # 基础过滤/展示列 (name/total_shares/change_pct 等) 来自 enriched 快照,
             # 在命中结果上事后联表, 避免把 enriched 列铺到全市场分钟行上。
             if current is not None and not current.is_empty():
@@ -1006,7 +1070,11 @@ class StrategyEngine:
                     "盘中信号仅可用于分钟策略(timeframes=['1m']), 日线策略不支持: "
                     + ", ".join(sorted(missing_csgi))
                 )
-            df = s.filter_history_fn(df, params)
+            df = (
+                s.filter_history_fn(df, params)
+                if _accepts_params(s.filter_history_fn)
+                else s.filter_history_fn(df)
+            )
             if "date" in df.columns:
                 df = df.filter(pl.col("date") == as_of)
         else:
@@ -1037,8 +1105,7 @@ class StrategyEngine:
 
         # Stage 2: 策略过滤
         if s.filter_fn:
-            expr = s.filter_fn(df, params)
-            df = df.filter(expr)
+            df = _call_strategy_filter(s.filter_fn, df, params, strategy_id)
 
         # Stage 3: 评分
         df = self._apply_scoring(df, scoring, scoring_directions)

@@ -204,16 +204,18 @@ function buildOption(data: MinuteKlineRow[], prevClose: number | undefined, avgP
 
   // x 轴标签: 9:30, 10:30, 11:30/13:00, 14:00, 15:00
   // 11:30(idx 120) 和 13:00(idx 121) 相邻会重叠, 合并为一个标签
-  const xAxisLabelMap: Record<number, string> = {
-    0: '9:30',
-    60: '10:30',
-    120: '11:30/13:00',
-    181: '14:00',
-    241: '15:00',
+  // x 轴标签按「时刻字符串」定位, 不再用硬编码索引。
+  // 网格是 241 点 (09:30 竞价根 + 09:31..11:30 + 13:01..15:00, 无 13:00),
+  // 而原映射是按 242 点写的 (181='14:00' / 241='15:00'): 181 实际已是 14:01,
+  // 且最大索引是 240 → '15:00' 永远不显示。表现为时间轴比数据「慢一分钟」。
+  const xAxisLabelMap: Record<string, string> = {
+    '09:30': '9:30',
+    '10:30': '10:30',
+    '11:30': '11:30/13:00',
+    '14:00': '14:00',
+    '15:00': '15:00',
   }
-  const xAxisLabelFormatter = (_value: string, idx: number) => {
-    return xAxisLabelMap[idx] ?? ''
-  }
+  const xAxisLabelFormatter = (value: string) => xAxisLabelMap[String(value)] ?? ''
 
   return {
     animation: false,

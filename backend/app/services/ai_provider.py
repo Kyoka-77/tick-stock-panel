@@ -26,6 +26,11 @@ CODEX_DEFAULT_COMMAND = "codex"
 CODEX_SUPPORTED_REASONING_EFFORTS = {"none", "minimal", "low", "medium", "high", "xhigh"}
 OPENAI_DEFAULT_REASONING_EFFORT = "high"
 
+# 桌面版是无控制台的 GUI 进程 (console=False)。此时 spawn 控制台子程序
+# (codex CLI) Windows 会为其新建控制台窗口 —— 表现为界面操作时闪出黑窗。
+# CREATE_NO_WINDOW 让子进程在无窗口模式运行 (非 Windows 恒为 0)。
+_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 _CODEX_ENV_ALLOWLIST = (
     "PATH",
     "PATHEXT",
@@ -281,6 +286,7 @@ def codex_cli_available() -> bool:
             capture_output=True,
             timeout=15,
             check=False,
+            creationflags=_NO_WINDOW,
         )
     except (OSError, subprocess.TimeoutExpired):
         return False
@@ -763,6 +769,7 @@ def _run_codex_process(
             env=env,
             timeout=timeout,
             check=False,
+            creationflags=_NO_WINDOW,
         )
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError("Codex CLI 调用超时, 请稍后重试或检查本机 Codex 登录状态") from exc

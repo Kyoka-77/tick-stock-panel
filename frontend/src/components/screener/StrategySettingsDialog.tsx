@@ -343,16 +343,21 @@ export function StrategySettingsDialog({ strategyId, onClose, onSaved, onAiModif
 
   const handleDownload = async () => {
     if (!strategyId || !detail || (detail.source !== 'ai' && detail.source !== 'custom')) return
-    const src = await api.strategyGetSource(strategyId)
-    const blob = new Blob([src.code], { type: 'text/x-python;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${strategyId}.py`
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    URL.revokeObjectURL(url)
+    // 桌面版是 WebView2, 不处理 Blob / a.download 下载 (点了没反应)。改为让后端
+    // 直接吐带 Content-Disposition 的文件, 再把该 URL 交给系统默认浏览器打开。
+    const url = new URL(
+      `/api/strategies/${encodeURIComponent(strategyId)}/download`,
+      window.location.origin,
+    ).toString()
+    const bridge = (window as unknown as {
+      pywebview?: { api?: { open_external_url?: (u: string) => Promise<boolean> } }
+    }).pywebview
+    if (bridge?.api?.open_external_url) {
+      await bridge.api.open_external_url(url)
+      return
+    }
+    // 普通浏览器环境下直接开新页下载
+    window.open(url, '_blank', 'noopener')
   }
 
   if (!strategyId) return null

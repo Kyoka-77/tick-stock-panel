@@ -13,6 +13,27 @@ const EVENT = 'tf-theme-change'
 
 export type Theme = 'dark' | 'light'
 
+// 桌面版 (pywebview): 把应用主题同步给原生窗口标题栏, 避免「亮色主题 + 暗色标题栏」割裂。
+// 浏览器里 window.pywebview 不存在, 整个函数是无副作用的 no-op。
+type DesktopApi = { set_titlebar_theme?: (dark: boolean) => Promise<boolean> }
+function syncDesktopTitlebar(theme: Theme) {
+  try {
+    const api = (window as unknown as { pywebview?: { api?: DesktopApi } }).pywebview?.api
+    void api?.set_titlebar_theme?.(theme === 'dark')
+  } catch { /* 非桌面环境, 忽略 */ }
+}
+
+// 桌面端初始化: 把当前主题同步给原生标题栏。
+// 注意时序 —— pywebview 的 'pywebviewready' 只触发一次, 若 JS 包执行晚于它
+// (WebView2 预注入), 监听会错过事件, 表现为「标题栏不跟主题」。
+// 因此两种时机都探测: 已经注入就直接同步, 否则等事件。
+if (typeof window !== 'undefined') {
+  const w = window as unknown as { pywebview?: { api?: DesktopApi } }
+  const applyThemeToTitlebar = () => syncDesktopTitlebar(getTheme())
+  window.addEventListener('pywebviewready', applyThemeToTitlebar)
+  if (w.pywebview?.api) applyThemeToTitlebar()
+}
+
 export function getTheme(): Theme {
   try {
     return localStorage.getItem(KEY) === 'light' ? 'light' : 'dark'
@@ -24,6 +45,7 @@ export function getTheme(): Theme {
 export function setTheme(theme: Theme) {
   try { localStorage.setItem(KEY, theme) } catch { /* ignore */ }
   document.documentElement.classList.toggle('dark', theme === 'dark')
+  syncDesktopTitlebar(theme)
   window.dispatchEvent(new CustomEvent(EVENT, { detail: theme }))
 }
 

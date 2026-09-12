@@ -20,6 +20,7 @@ import { boardTag } from '@/lib/board'
 import { boardTag as boardBadge } from '@/components/stock-table/primitives'
 import { BUILTIN_COLUMNS } from '@/lib/watchlist-columns'
 import { cnSignal } from '@/lib/signals'
+import { downloadInBrowser } from '@/lib/browserDownload'
 import { SignalPicker } from '@/components/screener/SignalPicker'
 import { startBacktest, stopBacktest, tryReconnect, useBacktestTask } from '@/lib/backtestTask'
 import { useDataStatus, useCapabilities } from '@/lib/useSharedQueries'
@@ -1324,13 +1325,9 @@ export function StrategyBacktest({ loadCandidate, onLoadConsumed }: {
         num(p.best), num(p.worst)].join(','))
     }
 
-    const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `回测_${name.replace(/[\\/:*?"<>|]/g, '_')}_${start}_${end}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    // 桌面版是 WebView2, 不处理 Blob 下载 —— 统一交给系统默认浏览器
+    const filename = `回测_${name.replace(/[\\/:*?"<>|]/g, '_')}_${start}_${end}.csv`
+    void downloadInBrowser(filename, '\ufeff' + lines.join('\n'), 'text/csv;charset=utf-8')
   }
 
   const applyRange = (months: number) => {

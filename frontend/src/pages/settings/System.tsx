@@ -5,11 +5,12 @@
  */
 import { useState, useCallback, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Settings2, Trash2, RefreshCw, Bell, Volume2, Info, ExternalLink } from 'lucide-react'
+import { Settings2, Trash2, RefreshCw, Bell, Volume2, Info, ExternalLink, Type } from 'lucide-react'
 import { usePreferences, useVersion } from '@/lib/useSharedQueries'
 import { api } from '@/lib/api'
 import { QK } from '@/lib/queryKeys'
 import { PageHeader } from '@/components/PageHeader'
+import { FontScaleControl } from '@/components/FontScaleControl'
 import { refreshAlertToastConfig } from '@/components/AlertToast'
 import { SOUND_OPTIONS, previewSound } from '@/lib/notificationSound'
 import {
@@ -104,6 +105,20 @@ export function SettingsSystemPanel() {
         title="系统设置"
         subtitle="全局行为开关"
       />
+
+      <section className="rounded-card border border-border bg-surface p-5 mb-6">
+        <h2 className="flex items-center gap-2 text-sm font-medium text-foreground">
+          <Type className="h-4 w-4 text-muted" />
+          界面字号
+        </h2>
+        <p className="mt-1 text-xs text-secondary leading-relaxed">
+          等比调整全局文字大小。会同时覆盖标准刻度与表格/列表里的密集像素字号,
+          修改后立即生效并保存在本机。
+        </p>
+        <div className="mt-4">
+          <FontScaleControl variant="inline" />
+        </div>
+      </section>
 
       <section className="rounded-card border border-border bg-surface p-5">
         <div className="flex items-center gap-2 mb-4">
