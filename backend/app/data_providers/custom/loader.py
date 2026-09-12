@@ -21,6 +21,7 @@ from app.data_providers.custom.config import (
     load_config,
 )
 from app.data_providers.custom.provider import GenericHTTPProvider
+from app.services.node_runtime import find_npm
 
 logger = logging.getLogger(__name__)
 
@@ -165,9 +166,17 @@ def install_plugin(name: str) -> tuple[bool, str]:
 
     try:
         if runtime == "node":
-            npm = shutil.which("npm")
+            # 打包版随包内置 node_modules —— 依赖已就绪, 不需要 npm,
+            # 更不该因为机器上没有 npm 就把已可用的插件报成安装失败。
+            if (pdir / "node_modules").is_dir():
+                return True, "依赖已就绪 (随包内置)"
+            npm = find_npm()
             if not npm:
-                return False, "未找到 npm, 请先安装 Node.js (>=18)"
+                return False, (
+                    "未找到 npm。请先安装 Node.js (>=18), 或设环境变量 STOCK_SDK_NPM "
+                    "指向 npm; macOS 上若终端可用而此处报错, 通常是双击 .app 启动"
+                    "不加载 shell PATH 所致。"
+                )
             # 在插件目录执行 npm install
             result = subprocess.run(
                 [npm, "install", "--omit=dev", "--no-audit", "--no-fund"],

@@ -10,8 +10,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -35,11 +33,14 @@ class StockSDKBridgeError(RuntimeError):
 
 
 def _node_bin() -> str | None:
-    """定位 node 可执行文件: 优先环境变量 STOCK_SDK_NODE, 否则 PATH 中的 node。"""
-    env = os.getenv("STOCK_SDK_NODE")
-    if env:
-        return env if (Path(env).exists() or shutil.which(env)) else None
-    return shutil.which("node")
+    """定位 node 可执行文件。
+
+    优先 STOCK_SDK_NODE; 否则补全常见安装路径后在 PATH 中查找 ——
+    macOS 双击 .app 启动时 PATH 不含 Homebrew/nvm 等目录, 否则会误报「未找到 node」。
+    """
+    from app.services.node_runtime import find_node
+
+    return find_node()
 
 
 def run_job(job: dict, timeout: int = DEFAULT_TIMEOUT) -> dict:
